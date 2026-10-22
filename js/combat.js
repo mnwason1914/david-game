@@ -104,9 +104,12 @@ export class Combat {
     e.slingHit = true;
     e.hurt(S.dmg * this.game.attackMult(), pl.pos, S.knock);
     e.slingHit = false;
-    e.freeze = Math.max(e.freeze || 0, 0.05);
-    this.game.fx.spark(p.x, p.y, p.z, 0xfff1c0, 8);
-    this.game.fx.shake(0.06);
+    e.freeze = Math.max(e.freeze || 0, 0.08);
+    this.game.fx.spark(p.x, p.y, p.z, 0xfff1c0, 10);
+    this.game.fx.impact(p.x, p.y, p.z, 0.9, 0xffffff);
+    this.game.fx.whiteFlash(e, 0.07);
+    this.game.fx.shake(0.1);
+    this.game.fx.vibrate(15);
     this.sfx('hit');
     if (e.alive && e.state !== 'broken' && e.addPosture) e.addPosture(S.posture * (e.isOpen && !e.isOpen() ? 0.35 : 1));
   }
@@ -198,15 +201,26 @@ export class Combat {
       else dmg *= C.brokenLightMult;
     }
     const heavy = !!move.thrust;
-    e.hurt(dmg, pl.pos, move.knock * (near ? 0.5 : 1));
+    const wasOpen = !e.isOpen || e.isOpen();
+    e.hurt(dmg, pl.pos, move.knock * (near ? 0.5 : 1) * (wasOpen ? 1.6 : 1));
     pl.hitAny = true;
     const hs = heavy ? C.hitstop.heavy : C.hitstop.light;
-    pl.freeze = hs[0] * (near ? 1.3 : 1);
-    e.freeze = Math.max(e.freeze || 0, hs[1]);
+    // 빈틈에 꽂힌 타격(유효타)은 더 길게 멈추고 더 크게 울린다
+    const clean = wasOpen || broken;
+    const hm = (near ? 1.3 : 1) * (finisher ? 2.2 : clean ? 1.5 : 0.7);
+    pl.freeze = hs[0] * hm;
+    e.freeze = Math.max(e.freeze || 0, hs[1] * hm);
     if (heavy) { const f = pl.forward(); pl.vel.x -= f.x * 1.5; pl.vel.z -= f.z * 1.5; }
-    this.game.fx.spark(p.x, p.y, p.z, finisher ? 0xffe070 : near ? 0xd8c8a8 : 0xfff1c0, finisher ? 16 : heavy ? 10 : 7);
-    this.game.fx.shake(finisher ? 0.35 : heavy ? 0.15 : near ? 0.06 : 0.08);
-    this.sfx(finisher ? 'finisher' : heavy ? 'thrust' : near ? 'dull' : 'hit');
+    const fx = this.game.fx;
+    fx.spark(p.x, p.y, p.z, finisher ? 0xffe070 : near ? 0xd8c8a8 : 0xfff1c0, finisher ? 22 : heavy ? 14 : clean ? 10 : 5);
+    if (clean) {
+      fx.impact(p.x, p.y, p.z, finisher ? 2.2 : heavy ? 1.5 : 1.05, finisher ? 0xffe070 : 0xffffff);
+      fx.whiteFlash(e, finisher ? 0.12 : 0.08);
+      fx.punch(finisher ? 7 : heavy ? 4.5 : 2.5);
+      fx.vibrate(finisher ? 60 : heavy ? 35 : 18);
+    } else fx.impact(p.x, p.y, p.z, 0.55, 0xb8b0a0);
+    fx.shake(finisher ? 0.5 : heavy ? (clean ? 0.32 : 0.12) : clean ? 0.16 : 0.05);
+    this.sfx(finisher ? 'finisher' : heavy ? (clean ? 'thrust' : 'dull') : near ? 'dull' : clean ? 'hit' : 'dull');
     if (!e.alive) return;
     if (finisher) {
       e.posture = e.def.posture.max * C.brokenReset;
@@ -256,9 +270,9 @@ export class Combat {
       const ac = ui.ac, t = ac.currentTime;
       if (ac.state === 'suspended') ac.resume();
       const S = {
-        hit: [[180, 0.25, 0.09, 'triangle', 90], [900, 0.06, 0.03, 'square', 400]],
+        hit: [[200, 0.34, 0.1, 'triangle', 70], [900, 0.06, 0.03, 'square', 400]],
         dull: [[120, 0.22, 0.08, 'triangle', 70]],
-        thrust: [[140, 0.32, 0.14, 'triangle', 60], [600, 0.08, 0.05, 'square', 200]],
+        thrust: [[150, 0.42, 0.18, 'triangle', 45], [600, 0.08, 0.05, 'square', 200]],
         finisher: [[90, 0.4, 0.3, 'sawtooth', 40], [300, 0.15, 0.2, 'triangle', 120]],
         wood: [[260, 0.2, 0.07, 'triangle', 140]],
         wall: [[700, 0.12, 0.05, 'square', 500], [150, 0.15, 0.06, 'triangle', 90]],
@@ -271,6 +285,22 @@ export class Combat {
         pebble: [[900, 0.08, 0.04, 'square', 600]],
       }[kind];
       if (!S) return;
+      // 타격음에는 짧은 잡음 '퍽'을 겹쳐 둔탁한 손맛을 낸다
+      const N = { hit: [0.5, 0.07, 1800], thrust: [0.7, 0.11, 1100], finisher: [0.9, 0.2, 700], dull: [0.35, 0.06, 900] }[kind];
+      if (N) {
+        if (!ui.noiseBuf) {
+          ui.noiseBuf = ac.createBuffer(1, ac.sampleRate * 0.3, ac.sampleRate);
+          const d = ui.noiseBuf.getChannelData(0);
+          for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+        }
+        const src = ac.createBufferSource(), bp = ac.createBiquadFilter(), g = ac.createGain();
+        src.buffer = ui.noiseBuf;
+        bp.type = 'bandpass'; bp.frequency.value = N[2]; bp.Q.value = 0.8;
+        g.gain.setValueAtTime(N[0] * 0.6, t);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + N[1]);
+        src.connect(bp).connect(g).connect(ac.destination);
+        src.start(t); src.stop(t + N[1] + 0.02);
+      }
       for (const [f0, vol, dur, type, f1] of S) {
         const o = ac.createOscillator(), g = ac.createGain();
         o.type = type;
@@ -356,7 +386,64 @@ export class FX {
     this.rings.push(m);
   }
   shake(a) { this.shakeA = Math.max(this.shakeA, a); this.shakeT = 0.25; }
+  // 맞은 자리에 하얀 별 모양 섬광 (0.14초)
+  impact(x, y, z, size = 1, color = 0xffffff) {
+    if (!this.burstTex) {
+      const c = document.createElement('canvas'); c.width = c.height = 128;
+      const g = c.getContext('2d');
+      const rg = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+      rg.addColorStop(0, 'rgba(255,255,255,1)'); rg.addColorStop(0.25, 'rgba(255,255,255,.85)'); rg.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = rg; g.beginPath(); g.arc(64, 64, 64, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#fff';
+      for (let i = 0; i < 8; i++) {
+        const a = i / 8 * Math.PI * 2, l = i % 2 ? 40 : 62;
+        g.beginPath(); g.moveTo(64 + Math.cos(a) * l, 64 + Math.sin(a) * l);
+        g.lineTo(64 + Math.cos(a + 0.18) * 10, 64 + Math.sin(a + 0.18) * 10);
+        g.lineTo(64 + Math.cos(a - 0.18) * 10, 64 + Math.sin(a - 0.18) * 10); g.fill();
+      }
+      this.burstTex = new THREE.CanvasTexture(c);
+      this.bursts = [];
+    }
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.burstTex, color, transparent: true, depthTest: false, blending: THREE.AdditiveBlending }));
+    sp.renderOrder = 9;
+    sp.position.set(x, y, z);
+    sp.material.rotation = Math.random() * Math.PI;
+    sp.userData = { life: 0.14, size };
+    this.game.scene.add(sp);
+    this.bursts.push(sp);
+  }
+  // 맞은 적을 잠깐 하얗게 (얼어 있는 동안에도 실제 시간으로 풀린다)
+  whiteFlash(actor, dur = 0.08) {
+    const root = actor?.rig?.root;
+    if (!root) return;
+    this.whiteMat = this.whiteMat || new THREE.MeshBasicMaterial({ color: 0xffffff });
+    if (!actor._flashSaved) {
+      actor._flashSaved = [];
+      root.traverse((o) => { if (o.isMesh && o.material !== this.whiteMat) { actor._flashSaved.push([o, o.material]); o.material = this.whiteMat; } });
+    }
+    actor._flashT = Math.max(actor._flashT || 0, dur);
+    this.flashing = this.flashing || new Set();
+    this.flashing.add(actor);
+  }
+  // 카메라가 순간 앞으로 '쿵' 들어갔다 돌아온다 (화각 감소, 도 단위)
+  punch(deg) { this.punchA = Math.max(this.punchA || 0, deg); }
+  vibrate(ms) { try { navigator.vibrate?.(ms); } catch (e) {} }
   update(dt) {
+    if (this.bursts) {
+      for (const b of this.bursts) {
+        const u = b.userData; u.life -= dt;
+        const k = 1 - Math.max(0, u.life) / 0.14;
+        b.scale.setScalar(u.size * (0.45 + k * 0.9));
+        b.material.opacity = Math.max(0, u.life / 0.14);
+        if (u.life <= 0) { this.game.scene.remove(b); b.material.dispose(); }
+      }
+      this.bursts = this.bursts.filter((b) => b.userData.life > 0);
+    }
+    if (this.flashing) for (const a of this.flashing) {
+      a._flashT -= dt;
+      if (a._flashT <= 0) { for (const [o, m] of a._flashSaved) o.material = m; a._flashSaved = null; this.flashing.delete(a); }
+    }
+    this.punchA = Math.max(0, (this.punchA || 0) - dt * 40);
     for (const p of this.parts) {
       const u = p.userData;
       u.life -= dt;
@@ -377,8 +464,8 @@ export class FX {
     if (this.shakeT <= 0) this.shakeA = 0;
   }
   shakeOffset() {
-    if (this.shakeT <= 0) return { x: 0, z: 0 };
+    if (this.shakeT <= 0) return { x: 0, y: 0, z: 0 };
     const a = this.shakeA * (this.shakeT / 0.25);
-    return { x: (Math.random() - 0.5) * a, z: (Math.random() - 0.5) * a };
+    return { x: (Math.random() - 0.5) * a, y: (Math.random() - 0.5) * a * 0.7, z: (Math.random() - 0.5) * a };
   }
 }

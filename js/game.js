@@ -487,17 +487,10 @@ export class Game {
     if (this.input.isHeld('camL')) { this.camYaw += dt * 2.2; this.camManualT = 1.2; }
     if (this.input.isHeld('camR')) { this.camYaw -= dt * 2.2; this.camManualT = 1.2; }
     this.camManualT = Math.max(0, (this.camManualT || 0) - dt);
-    if (!f && !pl.locked && this.camManualT <= 0) {
-      const boss = this.lockT || this.bossActive;
-      if (boss) {
-        // 보스전·타깃 고정: 다윗과 상대가 함께 보이도록 시점 고정
-        const want = Math.atan2(boss.pos.x - pl.pos.x, boss.pos.z - pl.pos.z);
-        this.camYaw += wrap(want - this.camYaw) * (1 - Math.exp(-dt * (this.lockT ? 5 : 2.5)));
-      } else {
-        // 옆으로 움직이면 천천히 캐릭터 뒤로 돌아감
-        const mv = this.input.move();
-        if (Math.abs(mv.x) > 0.2) this.camYaw += wrap(pl.yaw - this.camYaw) * Math.min(1, dt * 1.6 * Math.abs(mv.x));
-      }
+    // 시점 고정: 카메라는 스스로 돌지 않는다. 직접 끌어 돌리거나 타깃 고정(O)을 켰을 때만 움직인다
+    if (!f && !pl.locked && this.lockT) {
+      const want = Math.atan2(this.lockT.pos.x - pl.pos.x, this.lockT.pos.z - pl.pos.z);
+      this.camYaw += wrap(want - this.camYaw) * (1 - Math.exp(-dt * 5));
     }
     const tx = f ? f.x : pl.pos.x, tz = f ? f.z : pl.pos.z;
     const bd = this.bossActive ? Math.hypot(this.bossActive.pos.x - pl.pos.x, this.bossActive.pos.z - pl.pos.z) : 99;
@@ -537,7 +530,9 @@ export class Game {
     const cy = Math.max(gy + 1.55 + dist * Math.sin(pitch), this.world.heightAt(cx, cz) + 0.6);
     // 오른쪽 어깨 너머로 살짝 비켜 서서, 캐릭터는 화면 가운데 약간 아래·왼쪽에
     const rt = this.camRight(), side = cut ? 0 : 0.45 * Math.min(1, z);
-    this.camera.position.set(cx + rt.x * side + sh.x, cy, cz + rt.z * side + sh.z);
+    this.camera.position.set(cx + rt.x * side + sh.x, cy + sh.y, cz + rt.z * side + sh.z);
+    const fov = 55 - (this.fx.punchA || 0);
+    if (this.camera.fov !== fov) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
     const la = cut ? 2 : 5;
     this.camera.lookAt(this.camTarget.x + fw.x * la + rt.x * side + sh.x, gy + (cut ? 1.3 : 0.75), this.camTarget.z + fw.z * la + rt.z * side + sh.z);
     const so = this.sunOffset || new THREE.Vector3(-10, 30, 12);

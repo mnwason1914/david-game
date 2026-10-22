@@ -71,5 +71,5 @@ export const COMBAT = {
   openStates: ['opening', 'stun', 'broken', 'deflected', 'fall'],
   openMult: 1.6,         // 빈틈에 맞힌 피해 배율
   guardedMult: 0.1,      // 빈틈이 아닐 때 피해 배율 (거의 막힘)
-  hitstop: { light: [0.06, 0.08], heavy: [0.09, 0.12], jg: 0.08, wall: 0.05 },  // [다윗, 맞은 적]
+  hitstop: { light: [0.07, 0.1], heavy: [0.11, 0.15], jg: 0.08, wall: 0.05 },  // [다윗, 맞은 적]
 };
