@@ -6,6 +6,11 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0d1530">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="다윗">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
 <title>다윗 1장 MVP</title>
 <style>
   :root {
@@ -208,6 +213,9 @@
   .screen p { color: #cdbfa5; font-size: 13px; line-height: 1.6; margin: 18px 0 0; }
   .menu-btn { pointer-events: auto; background: var(--paper); color: var(--ink); border: 3px solid #6b4a2b; border-radius: 10px; padding: 12px 34px; font-size: 18px;
     font-weight: 800; margin: 6px; min-width: 200px; font-family: inherit; }
+  #fullhint { display: none; max-width: 420px; margin: 4px auto 10px; padding: 10px 14px; border-radius: 10px; background: rgba(255,211,77,.12); border: 1px solid rgba(255,211,77,.5); font-size: 14px; line-height: 1.6; }
+  #fullhint.show { display: block; }
+  body.isfull #btn-full { display: none; }
   .menu-btn.sub { background: transparent; color: #f4ead6; border-color: rgba(244,234,214,.5); font-size: 15px; padding: 9px 20px; }
   #scene-list { display: flex; flex-direction: column; gap: 6px; max-height: 70vh; overflow: auto; }
   #scene-list button { font-family: inherit; font-size: 16px; padding: 10px 18px; border-radius: 8px; border: 2px solid #6b4a2b; background: var(--paper); color: var(--ink); font-weight: 700; min-width: 240px; }
@@ -220,7 +228,8 @@
 // 직접 연 페이지(로컬·GitHub Pages)만 예외. ?top=숫자 로 여백(px)을 직접 정할 수도 있다.
 (function () {
   var b = document.body, h = location.hostname, framed = true;
-  try { framed = window.self !== window.top || !/^(localhost|127\.0\.0\.1|.*\.github\.io)$/.test(h); } catch (e) {}
+  try { framed = window.self !== window.top || !/^(localhost|127\.0\.0\.1|.*\.github\.io|.*\.netlify\.app)$/.test(h);
+    if (navigator.standalone || matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches) framed = false; } catch (e) {}
   if (framed) b.classList.add("framed");
   var m = /[?&]top=(\d+)/.exec(location.search);
   if (m) document.documentElement.style.setProperty("--top", m[1] + "px"), b.style.setProperty("--top", m[1] + "px");
@@ -283,6 +292,8 @@
   <h1>다윗</h1>
   <h2>1장 · 베들레헴의 목동</h2>
   <button class="menu-btn" id="btn-start">처음부터 시작</button>
+  <button class="menu-btn sub" id="btn-full">⛶ 전체화면으로 하기</button>
+  <div id="fullhint">아이폰은 사파리에서 전체화면을 지원하지 않아요.<br>아래 <b>공유 버튼 → 홈 화면에 추가</b>를 누른 뒤<br>홈 화면의 <b>다윗</b> 아이콘으로 열면 주소창 없이 전체화면으로 실행돼요.</div>
   <button class="menu-btn sub" id="btn-scenes">장면 선택 (테스트)</button>
   <p>가로 화면을 권장합니다 · 왼쪽 화면을 끌어 이동 · 오른쪽 화면을 끌어 시점 회전<br>방패 버튼을 누르고 있으면 방어, 맞기 직전에 누르면 저스트 가드<br>PC: WASD 이동 · 마우스 끌기 또는 Z/C 시점 회전 · J/스페이스 약공격 · U 강공격 · L 방어 · K/Shift 스텝 · O 타깃 고정 · R 물매 · E 상호작용 · Q 떡</p>
 </div>
